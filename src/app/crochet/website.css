@@ -1,0 +1,21 @@
+/* Website color palette */
+:root {
+  --color-cream-50: #fefdfb;
+  --color-cream-100: #fef6f0;
+  --color-cream-200: #fdeee0;
+
+  --color-rose-soft: #fce7f3;
+  --color-purple-soft: #f3e8ff;
+  --color-teal-soft: #ccfbf1;
+  --color-peach: #fed7d7;
+}
+
+/* Website-only utilities */
+* {
+  @apply transition-colors duration-200;
+}
+
+/* Website background helpers */
+.website-bg {
+  @apply bg-gradient-to-br from-rose-50 via-purple-50 to-teal-50;
+}
