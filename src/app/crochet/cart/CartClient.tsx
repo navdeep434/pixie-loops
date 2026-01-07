@@ -134,11 +134,11 @@ export default function CartClient() {
             {/* Cart Items */}
             <div className="lg:col-span-2 space-y-4">
               {cartItems.map((item) => (
-                <Card key={item.id} variant="elevated" className="p-6">
-                  <div className="flex gap-6">
+                <Card key={item.id} variant="elevated" className="p-4 sm:p-6">
+                  <div className="flex flex-col sm:flex-row gap-4 sm:gap-6">
                     {/* Product Image */}
-                    <div className="relative flex-shrink-0">
-                      <div className="h-32 w-32 rounded-xl bg-gradient-to-br from-purple-100 to-pink-100 flex items-center justify-center text-5xl">
+                    <div className="relative flex-shrink-0 mx-auto sm:mx-0">
+                      <div className="h-24 w-24 sm:h-32 sm:w-32 rounded-xl bg-gradient-to-br from-purple-100 to-pink-100 flex items-center justify-center text-4xl sm:text-5xl">
                         {item.icon}
                       </div>
                       {item.badge && (
@@ -149,39 +149,50 @@ export default function CartClient() {
                     </div>
 
                     {/* Product Details */}
-                    <div className="flex-1 flex flex-col justify-between">
+                    <div className="flex-1 flex flex-col justify-between min-w-0">
                       <div>
-                        <Heading level={5} className="mb-1">
-                          {item.name}
-                        </Heading>
-                        <Text variant="small" className="text-gray-500">
-                          Handcrafted with premium yarn
-                        </Text>
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <Heading level={5} className="mb-1 truncate">
+                              {item.name}
+                            </Heading>
+                            <Text variant="small" className="text-gray-500">
+                              Handcrafted with premium yarn
+                            </Text>
+                          </div>
+                          {/* Remove Button - Mobile Top Right */}
+                          <button
+                            onClick={() => removeItem(item.id)}
+                            className="sm:hidden rounded-lg p-2 text-gray-400 hover:bg-rose-50 hover:text-rose-600 transition flex-shrink-0"
+                          >
+                            <Trash2 className="h-5 w-5" />
+                          </button>
+                        </div>
                       </div>
 
-                      <div className="flex items-center justify-between mt-4">
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0 mt-4">
                         {/* Quantity Controls */}
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2 sm:gap-3">
                           <button
                             onClick={() => updateQuantity(item.id, -1)}
                             disabled={item.quantity <= 1}
-                            className="rounded-lg border-2 border-gray-200 p-2 hover:border-purple-300 hover:bg-purple-50 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="rounded-lg border-2 border-gray-200 p-1.5 sm:p-2 hover:border-purple-300 hover:bg-purple-50 transition disabled:opacity-50 disabled:cursor-not-allowed"
                           >
-                            <Minus className="h-4 w-4" />
+                            <Minus className="h-3 w-3 sm:h-4 sm:w-4" />
                           </button>
-                          <Text className="font-semibold w-8 text-center">
+                          <Text className="font-semibold w-8 text-center text-sm sm:text-base">
                             {item.quantity}
                           </Text>
                           <button
                             onClick={() => updateQuantity(item.id, 1)}
-                            className="rounded-lg border-2 border-gray-200 p-2 hover:border-purple-300 hover:bg-purple-50 transition"
+                            className="rounded-lg border-2 border-gray-200 p-1.5 sm:p-2 hover:border-purple-300 hover:bg-purple-50 transition"
                           >
-                            <Plus className="h-4 w-4" />
+                            <Plus className="h-3 w-3 sm:h-4 sm:w-4" />
                           </button>
                         </div>
 
                         {/* Price */}
-                        <div className="text-right">
+                        <div className="text-left sm:text-right">
                           <Text variant="small" className="text-gray-500">
                             ₹{item.price} each
                           </Text>
@@ -192,10 +203,10 @@ export default function CartClient() {
                       </div>
                     </div>
 
-                    {/* Remove Button */}
+                    {/* Remove Button - Desktop */}
                     <button
                       onClick={() => removeItem(item.id)}
-                      className="rounded-lg p-2 text-gray-400 hover:bg-rose-50 hover:text-rose-600 transition"
+                      className="hidden sm:block rounded-lg p-2 text-gray-400 hover:bg-rose-50 hover:text-rose-600 transition flex-shrink-0"
                     >
                       <Trash2 className="h-5 w-5" />
                     </button>
@@ -215,24 +226,25 @@ export default function CartClient() {
             {/* Order Summary */}
             <div className="space-y-6">
               {/* Promo Code */}
-              <Card variant="elevated" className="p-6">
+              <Card variant="elevated" className="p-4 sm:p-6">
                 <div className="flex items-center gap-2 mb-4">
                   <Tag className="h-5 w-5 text-purple-600" />
                   <Heading level={5}>Promo Code</Heading>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row gap-2">
                   <input
                     type="text"
                     value={promoCode}
                     onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
                     placeholder="Enter code"
                     disabled={!!appliedPromo}
-                    className="flex-1 rounded-xl border-2 border-gray-200 px-4 py-2 outline-none transition focus:border-purple-500 focus:ring-4 focus:ring-purple-100 disabled:bg-gray-50 disabled:cursor-not-allowed"
+                    className="flex-1 rounded-xl border-2 border-gray-200 px-4 py-2 text-sm sm:text-base outline-none transition focus:border-purple-500 focus:ring-4 focus:ring-purple-100 disabled:bg-gray-50 disabled:cursor-not-allowed"
                   />
                   <Button
                     size="sm"
                     onClick={applyPromoCode}
                     disabled={!!appliedPromo || !promoCode}
+                    className="w-full sm:w-auto"
                   >
                     Apply
                   </Button>
@@ -260,12 +272,12 @@ export default function CartClient() {
               </Card>
 
               {/* Summary */}
-              <Card variant="elevated" className="p-6">
+              <Card variant="elevated" className="p-4 sm:p-6">
                 <Heading level={5} className="mb-4">
                   Order Summary
                 </Heading>
 
-                <div className="space-y-3">
+                <div className="space-y-3 text-sm sm:text-base">
                   <div className="flex justify-between">
                     <Text variant="small">Subtotal</Text>
                     <Text variant="small" className="font-semibold">
@@ -303,7 +315,7 @@ export default function CartClient() {
                   <div className="border-t pt-3">
                     <div className="flex justify-between items-baseline">
                       <Heading level={5}>Total</Heading>
-                      <Heading level={3} className="text-purple-600">
+                      <Heading level={3} className="text-purple-600 text-xl sm:text-2xl">
                         ₹{Math.round(total)}
                       </Heading>
                     </div>
@@ -312,12 +324,13 @@ export default function CartClient() {
 
                 <Button
                   size="lg"
-                  className="w-full gap-2 mt-6"
+                  className="w-full gap-2 mt-6 text-sm sm:text-base"
                   onClick={() => showToast("Proceeding to checkout...", "success")}
                 >
-                  <Lock className="h-5 w-5" />
-                  Proceed to Checkout
-                  <ArrowRight className="h-5 w-5" />
+                  <Lock className="h-4 w-4 sm:h-5 sm:w-5" />
+                  <span className="hidden sm:inline">Proceed to Checkout</span>
+                  <span className="sm:hidden">Checkout</span>
+                  <ArrowRight className="h-4 w-4 sm:h-5 sm:w-5" />
                 </Button>
 
                 {shipping > 0 && (
@@ -328,7 +341,7 @@ export default function CartClient() {
               </Card>
 
               {/* Benefits */}
-              <Card variant="bordered" className="p-6 bg-gradient-to-br from-purple-50 to-pink-50">
+              <Card variant="bordered" className="p-4 sm:p-6 bg-gradient-to-br from-purple-50 to-pink-50">
                 <div className="space-y-3">
                   <div className="flex items-start gap-3">
                     <Gift className="h-5 w-5 text-purple-600 flex-shrink-0 mt-0.5" />
