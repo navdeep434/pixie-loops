@@ -13,18 +13,21 @@ import {
   useToast,
 } from "@/components/elements";
 import { Mail, Lock, Eye, EyeOff, LogIn } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function LoginClient() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [remember, setRemember] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [errors, setErrors] = useState({ email: "", password: "" });
+  const [errors, setErrors] = useState({ email: "", password: "", general: "" });
   const { showToast } = useToast();
+  const { login } = useAuth();
   const router = useRouter();
 
   const validate = () => {
-    const newErrors = { email: "", password: "" };
+    const newErrors = { email: "", password: "", general: "" };
     let isValid = true;
 
     if (!email) {
@@ -53,17 +56,33 @@ export default function LoginClient() {
     if (!validate()) return;
 
     setLoading(true);
+    setErrors({ email: "", password: "", general: "" });
 
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-
-    console.log({ email, password });
-
-    showToast("Login successful! Welcome back! 🎉", "success");
-    setLoading(false);
-
-    // Redirect to home
-    router.push("/crochet");
+    try {
+      await login(email, password, remember);
+      
+      showToast(`Welcome back! 🎉`, "success");
+      
+      // Wait a bit for state to update, then navigate
+      setTimeout(() => {
+        router.push("/crochet");
+        router.refresh(); // Force refresh to update navbar
+      }, 100);
+      
+    } catch (error: any) {
+      console.error('Login error:', error);
+      
+      const errorMessage = error.message || "Login failed. Please try again.";
+      
+      setErrors({
+        email: "",
+        password: "",
+        general: errorMessage,
+      });
+      showToast(errorMessage, "error");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -87,6 +106,15 @@ export default function LoginClient() {
         {/* Login Card */}
         <Card variant="elevated" className="p-8">
           <form onSubmit={handleSubmit} className="space-y-6">
+            {/* General Error Message */}
+            {errors.general && (
+              <div className="p-3 rounded-lg bg-red-50 border border-red-200">
+                <Text variant="small" className="text-red-600">
+                  {errors.general}
+                </Text>
+              </div>
+            )}
+
             <TextBox
               label="Email Address"
               name="email"
@@ -128,6 +156,8 @@ export default function LoginClient() {
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
+                  checked={remember}
+                  onChange={(e) => setRemember(e.target.checked)}
                   className="h-4 w-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
                 />
                 <Text variant="small">Remember me</Text>
@@ -161,6 +191,7 @@ export default function LoginClient() {
               variant="outline"
               className="w-full gap-2"
               onClick={() => showToast("Google login coming soon!", "info")}
+              disabled={loading}
             >
               <svg className="h-5 w-5" viewBox="0 0 24 24">
                 <path
@@ -187,6 +218,7 @@ export default function LoginClient() {
               variant="outline"
               className="w-full gap-2"
               onClick={() => showToast("Facebook login coming soon!", "info")}
+              disabled={loading}
             >
               <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />

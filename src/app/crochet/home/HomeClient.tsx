@@ -2,25 +2,27 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { 
-  Button, 
-  TextBox, 
-  Card, 
-  Badge, 
-  Heading, 
+import BannerCarousel from "./BannerCarousel";
+import {
+  Button,
+  TextBox,
+  Card,
+  Badge,
+  Heading,
   Text,
   useToast,
 } from "@/components/elements";
-import { 
-  ShoppingBag, 
-  Heart, 
-  Star, 
-  Sparkles, 
-  Package, 
+import {
+  ShoppingBag,
+  Heart,
+  Star,
+  Sparkles,
+  Package,
   Shield,
   Truck,
   Mail,
 } from "lucide-react";
+import HeroCarousel from "./HeroCarousel";
 
 /* ---------- TYPES ---------- */
 type FeaturedProduct = {
@@ -64,12 +66,16 @@ export default function HomeClient({ featuredProducts, testimonials = [] }: Prop
 
   return (
     <>
-      {/* ================= HERO SECTION ================= */}
+      {/* ================= NEW BANNER CAROUSEL (FULL WIDTH - NO TEXT) ================= */}
+      <BannerCarousel />
+      {/* <HeroCarousel /> */}
+
+      {/* ================= HERO SECTION (ORIGINAL - WITH TEXT ON LEFT) ================= */}
       <section className="relative overflow-hidden bg-gradient-to-br from-purple-100 via-pink-50 to-rose-100 py-24 md:py-32">
         {/* Decorative Elements */}
         <div className="absolute top-10 left-10 h-32 w-32 rounded-full bg-purple-300/30 blur-3xl"></div>
         <div className="absolute bottom-20 right-20 h-40 w-40 rounded-full bg-pink-300/30 blur-3xl"></div>
-        
+
         <div className="relative mx-auto max-w-7xl px-6">
           <div className="grid items-center gap-12 md:grid-cols-2">
             {/* Left Content */}
@@ -86,8 +92,8 @@ export default function HomeClient({ featuredProducts, testimonials = [] }: Prop
               </Heading>
 
               <Text variant="lead" className="text-gray-600">
-                Each piece is lovingly handcrafted with premium yarn, bringing warmth 
-                and personality to your home. From cozy blankets to adorable amigurumi, 
+                Each piece is lovingly handcrafted with premium yarn, bringing warmth
+                and personality to your home. From cozy blankets to adorable amigurumi,
                 find something special today.
               </Text>
 
@@ -155,8 +161,8 @@ export default function HomeClient({ featuredProducts, testimonials = [] }: Prop
           </div>
 
           <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
-            {featuredProducts.map((item) => (
-              <Card key={item.id} variant="elevated" className="group overflow-hidden">
+            {featuredProducts.map((item, idx) => (
+              <Card key={item.id} variant="elevated" className={`group overflow-hidden stagger-item`}>
                 {/* Product Image */}
                 <div className="relative bg-gradient-to-br from-purple-50 to-pink-50 flex h-64 items-center justify-center text-7xl transition-all group-hover:scale-105">
                   {item.icon ?? "🧶"}
@@ -255,7 +261,7 @@ export default function HomeClient({ featuredProducts, testimonials = [] }: Prop
                 description: "Personalized creations made just for you",
               },
             ].map((feature, idx) => (
-              <Card key={idx} variant="bordered" className="p-6 text-center space-y-4">
+              <Card key={idx} variant="bordered" className="p-6 text-center space-y-4 stagger-item">
                 <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-purple-600 to-pink-600 text-white">
                   {feature.icon}
                 </div>
@@ -281,10 +287,9 @@ export default function HomeClient({ featuredProducts, testimonials = [] }: Prop
                 Join our community of happy crafters
               </Text>
             </div>
-
             <div className="grid gap-8 md:grid-cols-3">
-              {testimonials.map((testimonial) => (
-                <Card key={testimonial.id} variant="bordered" className="p-6 space-y-4">
+              {testimonials.map((testimonial, idx) => (
+                <Card key={testimonial.id} variant="bordered" className="p-6 space-y-4 stagger-item">
                   <div className="flex items-center gap-1">
                     {[...Array(testimonial.rating)].map((_, i) => (
                       <Star key={i} className="h-5 w-5 fill-amber-400 text-amber-400" />

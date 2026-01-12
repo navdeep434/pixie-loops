@@ -3,17 +3,22 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, ReactNode } from "react";
-import { ShoppingBag, Menu, X, Heart, User } from "lucide-react";
+import { ShoppingBag, Menu, X, Heart, User, LogOut, UserCircle, Package } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function WebsiteNavbar() {
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
   const pathname = usePathname();
+  const { user, isAuthenticated, logout, loading } = useAuth();
+
 
   const isActive = (path: string) => pathname?.startsWith(path);
 
   useEffect(() => {
     setOpen(false);
+    setShowUserMenu(false);
   }, [pathname]);
 
   useEffect(() => {
@@ -23,6 +28,11 @@ export default function WebsiteNavbar() {
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
+
+  const handleLogout = async () => {
+    await logout();
+    setShowUserMenu(false);
+  };
 
   return (
     <header
@@ -76,13 +86,94 @@ export default function WebsiteNavbar() {
               <Heart className="h-5 w-5" />
             </Link>
 
-            <Link
-              href="/crochet/login"
-              className="rounded-full p-2.5 text-gray-600 transition hover:bg-purple-50 hover:text-purple-600"
-              aria-label="Account"
-            >
-              <User className="h-5 w-5" />
-            </Link>
+            {/* User Account Dropdown */}
+            {isAuthenticated ? (
+              <div className="relative">
+                <button
+                  onClick={() => setShowUserMenu(!showUserMenu)}
+                  className="flex items-center gap-2 rounded-full p-2.5 text-gray-600 transition hover:bg-purple-50 hover:text-purple-600"
+                  aria-label="Account"
+                >
+                  <User className="h-5 w-5" />
+                  <span className="text-sm font-medium hidden lg:block">{user?.name}</span>
+                </button>
+
+                {showUserMenu && (
+                  <>
+                    {/* Backdrop */}
+                    <div 
+                      className="fixed inset-0 z-10" 
+                      onClick={() => setShowUserMenu(false)}
+                    />
+                    
+                    {/* Dropdown Menu */}
+                    <div className="absolute right-0 mt-2 w-56 rounded-xl bg-white shadow-xl border border-gray-100 py-2 z-20">
+                      <div className="px-4 py-3 border-b border-gray-100">
+                        <p className="text-sm font-semibold text-gray-900">{user?.name}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">{user?.email}</p>
+                        {user?.roles && user.roles.length > 0 && (
+                          <div className="mt-2 flex gap-1">
+                            {user.roles.map((role:any) => (
+                              <span
+                                key={role}
+                                className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800"
+                              >
+                                {role}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="py-2">
+                        <Link
+                          href="/crochet/profile"
+                          className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-purple-50 transition"
+                          onClick={() => setShowUserMenu(false)}
+                        >
+                          <UserCircle className="h-4 w-4" />
+                          My Profile
+                        </Link>
+                        <Link
+                          href="/crochet/orders"
+                          className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-purple-50 transition"
+                          onClick={() => setShowUserMenu(false)}
+                        >
+                          <Package className="h-4 w-4" />
+                          My Orders
+                        </Link>
+                        <Link
+                          href="/crochet/wishlist"
+                          className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-purple-50 transition"
+                          onClick={() => setShowUserMenu(false)}
+                        >
+                          <Heart className="h-4 w-4" />
+                          Wishlist
+                        </Link>
+                      </div>
+
+                      <div className="border-t border-gray-100 pt-2">
+                        <button
+                          onClick={handleLogout}
+                          className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition"
+                        >
+                          <LogOut className="h-4 w-4" />
+                          Logout
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : (
+              <Link
+                href="/crochet/login"
+                className="rounded-full px-4 py-2.5 text-sm font-semibold text-gray-600 transition hover:bg-purple-50 hover:text-purple-600"
+                aria-label="Login"
+              >
+                Login
+              </Link>
+            )}
 
             <Link
               href="/crochet/cart"
@@ -115,6 +206,21 @@ export default function WebsiteNavbar() {
       {open && (
         <div className="border-t bg-white shadow-2xl md:hidden">
           <div className="flex flex-col gap-1 px-4 py-6">
+            {/* User Info (Mobile) */}
+            {isAuthenticated && user && (
+              <div className="mb-4 rounded-lg bg-gradient-to-r from-purple-50 to-pink-50 p-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-purple-400 to-pink-400 text-white font-semibold">
+                    {user.name.charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900">{user.name}</p>
+                    <p className="text-xs text-gray-600">{user.email}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <span className="mb-3 text-xs font-bold uppercase tracking-wider text-gray-400">
               Navigation
             </span>
@@ -146,9 +252,28 @@ export default function WebsiteNavbar() {
             <MobileLink href="/crochet/wishlist">
               💖 Wishlist
             </MobileLink>
-            <MobileLink href="/crochet/login">
-              👤 Login
-            </MobileLink>
+
+            {isAuthenticated ? (
+              <>
+                <MobileLink href="/crochet/profile">
+                  👤 My Profile
+                </MobileLink>
+                <MobileLink href="/crochet/orders">
+                  📦 My Orders
+                </MobileLink>
+                <button
+                  onClick={handleLogout}
+                  className="rounded-lg px-4 py-3 text-left text-red-600 transition hover:bg-red-50 flex items-center gap-2"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Logout
+                </button>
+              </>
+            ) : (
+              <MobileLink href="/crochet/login">
+                👤 Login
+              </MobileLink>
+            )}
 
             <Link
               href="/crochet/cart"

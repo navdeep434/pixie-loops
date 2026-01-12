@@ -3,7 +3,7 @@ import WebsiteFooter from "@/components/website/WebsiteFooter";
 
 import "../../app/globals.css";
 
-export default function WebsiteLayout({
+export default function CrochetLayout({
   children,
 }: {
   children: React.ReactNode;

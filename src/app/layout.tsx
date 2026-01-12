@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { Playfair_Display, Inter } from "next/font/google";
-// import "./website.css";
-
+import { AuthProvider } from '@/contexts/AuthContext';
 import { ToastProvider } from "@/components/elements/useToast";
+// import "./website.css";
 
 const playfair = Playfair_Display({
   variable: "--font-playfair",
@@ -23,16 +23,16 @@ export const metadata: Metadata = {
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
+}) {
   return (
     <html lang="en">
-      <body
-        className={`${playfair.variable} ${inter.variable} min-h-screen bg-gradient-to-br from-rose-50 via-purple-50 to-teal-50 font-sans antialiased`}
-      >
+      <body className={`${playfair.variable} ${inter.variable}`}>
         <ToastProvider>
-          {children}
+          <AuthProvider>
+            {children}
+          </AuthProvider>
         </ToastProvider>
       </body>
     </html>
