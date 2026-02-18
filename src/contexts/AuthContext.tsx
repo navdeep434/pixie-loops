@@ -1,28 +1,22 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { useRouter } from 'next/navigation';
-import { API_URL } from '@/lib/api/config';
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  ReactNode,
+} from "react";
+import { API_URL } from "@/lib/api/config";
 
+// ================= TYPES =================
 
-// Types
 interface User {
   id: number;
   name: string;
   email: string;
   roles: string[];
   permissions: string[];
-}
-
-interface AuthContextType {
-  user: User | null;
-  loading: boolean;
-  login: (email: string, password: string, remember?: boolean) => Promise<void>;
-  logout: () => Promise<void>;
-  register: (data: RegisterData) => Promise<void>;
-  isAuthenticated: boolean;
-  hasRole: (role: string) => boolean;
-  hasPermission: (permission: string) => boolean;
 }
 
 interface RegisterData {
@@ -34,163 +28,162 @@ interface RegisterData {
   address?: string;
 }
 
+interface AuthContextType {
+  user: User | null;
+  loading: boolean;
+  login: (email: string, password: string, remember?: boolean) => Promise<void>;
+  logout: () => Promise<void>;
+  register: (data: RegisterData) => Promise<void>;
+  refresh: () => Promise<void>;
+  isAuthenticated: boolean;
+  hasRole: (role: string) => boolean;
+  hasPermission: (permission: string) => boolean;
+}
+
+// ================= CONTEXT =================
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const router = useRouter();
 
-  // Check if user is logged in on mount
   useEffect(() => {
     checkAuth();
   }, []);
 
+  // ================= CHECK AUTH =================
+
   const checkAuth = async () => {
     try {
       const response = await fetch(`${API_URL}/auth/me`, {
-        headers: { 'Accept': 'application/json' },
-        credentials: 'include',
+        credentials: "include",
+        headers: { Accept: "application/json" },
       });
 
-      if (!response.ok) {
-        throw new Error('Unauthenticated');
-      }
+      if (!response.ok) throw new Error();
 
       const data = await response.json();
 
-      if (data.success && data.user) {
+      // 🔥 Allow ONLY customer role
+      if (data.success && data.user?.roles.includes("customer")) {
         setUser(data.user);
-        sessionStorage.setItem('user', JSON.stringify(data.user));
       } else {
-        throw new Error('Invalid session');
+        setUser(null);
       }
     } catch {
       setUser(null);
-      sessionStorage.clear();
-      localStorage.clear();
     } finally {
       setLoading(false);
     }
   };
 
+  // ================= LOGIN =================
 
-  const login = async (email: string, password: string, remember: boolean = false) => {
+  const login = async (
+    email: string,
+    password: string,
+    remember: boolean = false
+  ) => {
     const response = await fetch(`${API_URL}/auth/login`, {
-      method: 'POST',
+      method: "POST",
+      credentials: "include",
       headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        'Referer': typeof window !== 'undefined' ? window.location.origin : '',
-        'Origin': typeof window !== 'undefined' ? window.location.origin : '',
+        "Content-Type": "application/json",
+        Accept: "application/json",
       },
-      credentials: 'include',
       body: JSON.stringify({ email, password, remember }),
     });
 
     const data = await response.json();
 
-    if (!response.ok) {
-      throw new Error(data.message || 'Login failed');
+    if (!response.ok || !data.success) {
+      throw new Error(data.message || "Login failed");
     }
 
-    if (data.success && data.user) {
-      // Update state immediately
-      setUser(data.user);
-      sessionStorage.setItem('user', JSON.stringify(data.user));
-
-      // Force a small delay to ensure state propagates
-      await new Promise(resolve => setTimeout(resolve, 50));
+    // Only allow customers
+    if (!data.user.roles.includes("customer")) {
+      setUser(null);
+      throw new Error("Not authorized as customer");
     }
 
-    return data;
+    setUser(data.user);
   };
+
+  // ================= REGISTER =================
 
   const register = async (registerData: RegisterData) => {
     const response = await fetch(`${API_URL}/auth/register`, {
-      method: 'POST',
+      method: "POST",
+      credentials: "include",
       headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        'Referer': typeof window !== 'undefined' ? window.location.origin : '',
-        'Origin': typeof window !== 'undefined' ? window.location.origin : '',
+        "Content-Type": "application/json",
+        Accept: "application/json",
       },
-      credentials: 'include',
       body: JSON.stringify(registerData),
     });
 
     const data = await response.json();
 
-    if (!response.ok) {
-      throw new Error(data.message || 'Registration failed');
+    if (!response.ok || !data.success) {
+      throw new Error(data.message || "Registration failed");
     }
 
-    if (data.success && data.user) {
-      setUser(data.user);
-      sessionStorage.setItem('user', JSON.stringify(data.user));
-    }
+    setUser(data.user);
   };
+
+  // ================= LOGOUT =================
 
   const logout = async () => {
     try {
       await fetch(`${API_URL}/auth/logout`, {
-        method: 'POST',
-        headers: {
-          'Accept': 'application/json',
-        },
-        credentials: 'include',
+        method: "POST",
+        credentials: "include",
+        headers: { Accept: "application/json" },
       });
     } catch (error) {
-      console.error('Logout error:', error);
+      console.error("Logout error:", error);
     } finally {
-      // 🔥 CLEAR EVERYTHING (FRONTEND)
       setUser(null);
-
-      // Clear ALL session storage
-      sessionStorage.clear();
-
-      // Clear ALL local storage (if any future usage)
-      localStorage.clear();
-
-      // Clear cookies (best-effort for non-httpOnly)
-      document.cookie.split(';').forEach(cookie => {
-        document.cookie = cookie
-          .replace(/^ +/, '')
-          .replace(/=.*/, `=;expires=${new Date(0).toUTCString()};path=/`);
-      });
-
-      // Hard redirect (prevents cached auth state)
-      window.location.href = '/crochet/login';
     }
   };
 
+  // ================= REFRESH =================
 
-  const hasRole = (role: string): boolean => {
-    return user?.roles?.includes(role) || false;
+  const refresh = async () => {
+    await checkAuth();
   };
 
-  const hasPermission = (permission: string): boolean => {
-    return user?.permissions?.includes(permission) || false;
-  };
+  // ================= HELPERS =================
 
-  const value = {
-    user,
-    loading,
-    login,
-    logout,
-    register,
-    isAuthenticated: !!user,
-    hasRole,
-    hasPermission,
-  };
+  const hasRole = (role: string) => user?.roles.includes(role) ?? false;
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  const hasPermission = (permission: string) =>
+    user?.permissions.includes(permission) ?? false;
+
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        login,
+        logout,
+        register,
+        refresh,
+        isAuthenticated: !!user,
+        hasRole,
+        hasPermission,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth() {
   const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+  if (!context) {
+    throw new Error("useAuth must be used within AuthProvider");
   }
   return context;
 }

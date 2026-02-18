@@ -1,0 +1,473 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { useRouter, useParams } from "next/navigation";
+import {
+  ArrowLeft, Save, Trash2, Upload, X, Plus,
+  Package, Tag, RefreshCw,
+} from "lucide-react";
+import { useToast } from "@/components/elements/useToast";
+import { API_URL } from "@/lib/api/config";
+
+type Category = { id: number; name: string };
+
+type ProductForm = {
+  name: string;
+  description: string;
+  price: string;
+  compare_at_price: string;
+  sku: string;
+  barcode: string;
+  stock: string;
+  category_id: string;
+  status: string;
+  tags: string[];
+};
+
+export default function EditProductPage() {
+  const router = useRouter();
+  const params = useParams();
+  const id = params?.id as string;
+  const { showToast } = useToast();
+
+  const [form, setForm] = useState<ProductForm>({
+    name: "", description: "", price: "", compare_at_price: "",
+    sku: "", barcode: "", stock: "", category_id: "", status: "active", tags: [],
+  });
+  const [images, setImages] = useState<{ id?: number; url: string }[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [newTag, setNewTag] = useState("");
+
+  useEffect(() => {
+    Promise.all([fetchProduct(), fetchCategories()]);
+  }, [id]);
+
+  const fetchProduct = async () => {
+    try {
+      const res = await fetch(`${API_URL}/admin/products/${id}`, {
+        credentials: "include",
+        headers: { Accept: "application/json" },
+      });
+      if (!res.ok) throw new Error("Product not found");
+      const data = await res.json();
+      const p = data.product ?? data.data ?? data;
+
+      setForm({
+        name: p.name ?? "",
+        description: p.description ?? "",
+        price: String(p.price ?? ""),
+        compare_at_price: String(p.compare_at_price ?? ""),
+        sku: p.sku ?? "",
+        barcode: p.barcode ?? "",
+        stock: String(p.stock ?? ""),
+        category_id: String(p.category?.id ?? p.category_id ?? ""),
+        status: p.status ?? "active",
+        tags: p.tags ?? [],
+      });
+
+      setImages(
+        (p.images ?? []).map((img: any) =>
+          typeof img === "string" ? { url: img } : { id: img.id, url: img.url }
+        )
+      );
+    } catch (err: any) {
+      showToast(err.message || "Failed to load product", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchCategories = async () => {
+    try {
+      const res = await fetch(`${API_URL}/admin/categories`, {
+        credentials: "include",
+        headers: { Accept: "application/json" },
+      });
+      const data = await res.json();
+      setCategories(data.data ?? data.categories ?? data ?? []);
+    } catch {
+      // non-critical
+    }
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const body = {
+        ...form,
+        price: parseFloat(form.price),
+        compare_at_price: form.compare_at_price ? parseFloat(form.compare_at_price) : null,
+        stock: parseInt(form.stock),
+        category_id: form.category_id ? parseInt(form.category_id) : null,
+      };
+
+      const res = await fetch(`${API_URL}/admin/products/${id}`, {
+        method: "PUT",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || "Failed to save");
+      }
+
+      showToast("Product updated successfully!", "success");
+      setTimeout(() => router.push("/admin/products"), 800);
+    } catch (err: any) {
+      showToast(err.message || "Failed to update product", "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!confirm("Delete this product? This cannot be undone.")) return;
+    try {
+      const res = await fetch(`${API_URL}/admin/products/${id}`, {
+        method: "DELETE",
+        credentials: "include",
+        headers: { Accept: "application/json" },
+      });
+      if (!res.ok) throw new Error("Delete failed");
+      showToast("Product deleted", "success");
+      router.push("/admin/products");
+    } catch {
+      showToast("Failed to delete product", "error");
+    }
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append("image", file);
+    try {
+      const res = await fetch(`${API_URL}/admin/products/${id}/images`, {
+        method: "POST",
+        credentials: "include",
+        body: formData,
+      });
+      if (!res.ok) throw new Error("Upload failed");
+      const data = await res.json();
+      setImages((prev) => [...prev, { id: data.id, url: data.url }]);
+      showToast("Image uploaded", "success");
+    } catch {
+      showToast("Failed to upload image", "error");
+    }
+  };
+
+  const handleRemoveImage = async (index: number) => {
+    const img = images[index];
+    if (img.id) {
+      try {
+        await fetch(`${API_URL}/admin/products/${id}/images/${img.id}`, {
+          method: "DELETE",
+          credentials: "include",
+        });
+      } catch {
+        showToast("Failed to remove image", "error");
+        return;
+      }
+    }
+    setImages((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const addTag = () => {
+    const tag = newTag.trim();
+    if (tag && !form.tags.includes(tag)) {
+      setForm({ ...form, tags: [...form.tags, tag] });
+      setNewTag("");
+    }
+  };
+
+  const price = parseFloat(form.price) || 0;
+  const comparePrice = parseFloat(form.compare_at_price) || 0;
+  const stock = parseInt(form.stock) || 0;
+  const discount = comparePrice > price
+    ? Math.round(((comparePrice - price) / comparePrice) * 100)
+    : 0;
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="w-8 h-8 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => router.back()}
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+          >
+            <ArrowLeft className="h-5 w-5 text-gray-600" />
+          </button>
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900">Edit Product</h2>
+            <p className="text-sm text-gray-600 mt-1">Update product information</p>
+          </div>
+        </div>
+        <div className="flex gap-3">
+          <button
+            onClick={handleDelete}
+            className="flex items-center gap-2 px-4 py-2.5 border border-red-300 text-red-600 hover:bg-red-50 font-semibold rounded-lg transition-all"
+          >
+            <Trash2 className="h-4 w-4" />
+            Delete
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-semibold rounded-lg shadow-md transition-all disabled:opacity-70"
+          >
+            {saving ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            {saving ? "Saving..." : "Save Changes"}
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        {/* Left — Main */}
+        <div className="lg:col-span-2 space-y-6">
+
+          {/* Basic Info */}
+          <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+            <h4 className="font-semibold text-gray-900 mb-4">Basic Information</h4>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Product Name *</label>
+                <input
+                  type="text"
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                <textarea
+                  rows={5}
+                  value={form.description}
+                  onChange={(e) => setForm({ ...form, description: e.target.value })}
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Pricing */}
+          <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+            <h4 className="font-semibold text-gray-900 mb-4">Pricing</h4>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Price *</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">₹</span>
+                  <input
+                    type="number"
+                    value={form.price}
+                    onChange={(e) => setForm({ ...form, price: e.target.value })}
+                    className="w-full pl-8 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Compare at Price</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">₹</span>
+                  <input
+                    type="number"
+                    value={form.compare_at_price}
+                    onChange={(e) => setForm({ ...form, compare_at_price: e.target.value })}
+                    className="w-full pl-8 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  />
+                </div>
+              </div>
+            </div>
+            {discount > 0 && (
+              <div className="mt-3 p-3 bg-green-50 rounded-lg border border-green-200">
+                <p className="text-sm text-green-700 font-medium">
+                  Savings: ₹{comparePrice - price} ({discount}% off)
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Inventory */}
+          <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+            <h4 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+              <Package className="h-5 w-5 text-purple-600" />
+              Inventory
+            </h4>
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">SKU</label>
+                <input
+                  type="text"
+                  value={form.sku}
+                  onChange={(e) => setForm({ ...form, sku: e.target.value })}
+                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Barcode</label>
+                <input
+                  type="text"
+                  value={form.barcode}
+                  onChange={(e) => setForm({ ...form, barcode: e.target.value })}
+                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Stock *</label>
+                <input
+                  type="number"
+                  value={form.stock}
+                  onChange={(e) => setForm({ ...form, stock: e.target.value })}
+                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                />
+              </div>
+            </div>
+            {stock === 0 && (
+              <div className="mt-3 p-3 bg-red-50 rounded-lg border border-red-200">
+                <p className="text-sm text-red-700 font-medium">⚠️ Product is out of stock</p>
+              </div>
+            )}
+            {stock > 0 && stock < 10 && (
+              <div className="mt-3 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+                <p className="text-sm text-yellow-700 font-medium">⚠️ Low stock warning</p>
+              </div>
+            )}
+          </div>
+
+          {/* Images */}
+          <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+            <h4 className="font-semibold text-gray-900 mb-4">Product Images</h4>
+            <div className="grid grid-cols-4 gap-4">
+              {images.map((img, index) => (
+                <div key={index} className="relative aspect-square rounded-lg overflow-hidden bg-gray-100 group">
+                  <img src={img.url} alt="" className="w-full h-full object-cover" />
+                  <button
+                    onClick={() => handleRemoveImage(index)}
+                    className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
+              <label className="aspect-square border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center hover:border-purple-500 hover:bg-purple-50 transition-all cursor-pointer">
+                <Upload className="h-6 w-6 text-gray-400 mb-1" />
+                <span className="text-xs text-gray-500">Upload</span>
+                <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+              </label>
+            </div>
+          </div>
+        </div>
+
+        {/* Right — Sidebar */}
+        <div className="space-y-6">
+
+          {/* Status */}
+          <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+            <h4 className="font-semibold text-gray-900 mb-4">Status</h4>
+            <select
+              value={form.status}
+              onChange={(e) => setForm({ ...form, status: e.target.value })}
+              className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+            >
+              <option value="active">Active</option>
+              <option value="draft">Draft</option>
+              <option value="archived">Archived</option>
+            </select>
+          </div>
+
+          {/* Organization */}
+          <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+            <h4 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+              <Tag className="h-5 w-5 text-purple-600" />
+              Organization
+            </h4>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
+                <select
+                  value={form.category_id}
+                  onChange={(e) => setForm({ ...form, category_id: e.target.value })}
+                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                >
+                  <option value="">Select category</option>
+                  {categories.map((cat) => (
+                    <option key={cat.id} value={cat.id}>{cat.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Tags</label>
+                <div className="flex gap-2 mb-2">
+                  <input
+                    type="text"
+                    value={newTag}
+                    onChange={(e) => setNewTag(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addTag())}
+                    placeholder="Add tag..."
+                    className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
+                  />
+                  <button
+                    onClick={addTag}
+                    className="p-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {form.tags.map((tag) => (
+                    <span key={tag} className="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-medium">
+                      {tag}
+                      <button onClick={() => setForm({ ...form, tags: form.tags.filter((t) => t !== tag) })}>
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Preview */}
+          <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+            <h4 className="font-semibold text-gray-900 mb-4">Preview</h4>
+            <div className="space-y-3">
+              <div className="aspect-square bg-gradient-to-br from-purple-100 to-pink-100 rounded-lg overflow-hidden flex items-center justify-center">
+                {images[0] ? (
+                  <img src={images[0].url} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <Package className="h-12 w-12 text-purple-300" />
+                )}
+              </div>
+              <p className="font-semibold text-gray-900 text-sm">{form.name || "Product Name"}</p>
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-purple-600">₹{form.price || "0"}</span>
+                {discount > 0 && (
+                  <span className="text-xs text-gray-400 line-through">₹{form.compare_at_price}</span>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
