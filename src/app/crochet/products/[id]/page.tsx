@@ -1,13 +1,14 @@
 import ProductDetailPage from "./ProductDetailPage";
 
 type Props = {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 };
 
 export async function generateMetadata({ params }: Props) {
+  const { id } = await params;
   try {
     const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api";
-    const res = await fetch(`${API_URL}/products/${params.id}`, {
+    const res = await fetch(`${API_URL}/products/${id}`, {
       next: { revalidate: 60 },
     });
     if (!res.ok) return { title: "Product | PixieLoops" };

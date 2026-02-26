@@ -85,7 +85,9 @@ export default function ProductDetailPage() {
     setTimeout(() => setAddedToCart(false), 2000);
   };
 
-  const images = product?.images ?? [];
+  // images array — url can be string or null
+  const images: { id: number; url: string | null; is_primary: boolean }[] =
+    (product?.images ?? []).map((img) => ({ ...img, url: img.url ?? null }));
   const displayImages = images.length > 0 ? images : [{ id: 0, url: null, is_primary: true }];
 
   // ─── Loading / not found ──────────────────────────────────────────────────
@@ -104,7 +106,10 @@ export default function ProductDetailPage() {
         <div className="text-center">
           <Package className="h-16 w-16 text-gray-200 mx-auto mb-4" />
           <h2 className="text-xl font-bold text-gray-700">Product not found</h2>
-          <button onClick={() => router.back()} className="mt-4 text-purple-600 hover:underline text-sm">
+          <button
+            onClick={() => router.back()}
+            className="mt-4 text-purple-600 hover:underline text-sm"
+          >
             Go back
           </button>
         </div>
@@ -161,6 +166,7 @@ export default function ProductDetailPage() {
                   <button
                     onClick={() => setSelectedImage((p) => Math.max(0, p - 1))}
                     disabled={selectedImage === 0}
+                    aria-label="Previous image"
                     className="absolute left-3 top-1/2 -translate-y-1/2 p-2 bg-white/90 rounded-full shadow-md disabled:opacity-30 hover:bg-white transition"
                   >
                     <ChevronLeft className="h-5 w-5 text-gray-700" />
@@ -168,6 +174,7 @@ export default function ProductDetailPage() {
                   <button
                     onClick={() => setSelectedImage((p) => Math.min(displayImages.length - 1, p + 1))}
                     disabled={selectedImage === displayImages.length - 1}
+                    aria-label="Next image"
                     className="absolute right-3 top-1/2 -translate-y-1/2 p-2 bg-white/90 rounded-full shadow-md disabled:opacity-30 hover:bg-white transition"
                   >
                     <ChevronRight className="h-5 w-5 text-gray-700" />
@@ -188,6 +195,7 @@ export default function ProductDetailPage() {
                   <button
                     key={img.id}
                     onClick={() => setSelectedImage(i)}
+                    aria-label={`View image ${i + 1}`}
                     className={`flex-shrink-0 h-16 w-16 rounded-xl overflow-hidden border-2 transition-all ${
                       selectedImage === i ? "border-purple-500 shadow-md" : "border-gray-100 hover:border-purple-300"
                     }`}
@@ -277,6 +285,7 @@ export default function ProductDetailPage() {
               <div className="flex items-center gap-3">
                 <button
                   onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                  aria-label="Decrease quantity"
                   className="h-10 w-10 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 flex items-center justify-center text-lg font-semibold transition-colors"
                 >
                   −
@@ -285,6 +294,7 @@ export default function ProductDetailPage() {
                 <button
                   onClick={() => setQuantity((q) => Math.min(product.stock, q + 1))}
                   disabled={quantity >= product.stock}
+                  aria-label="Increase quantity"
                   className="h-10 w-10 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 flex items-center justify-center text-lg font-semibold transition-colors disabled:opacity-40"
                 >
                   +
@@ -328,6 +338,7 @@ export default function ProductDetailPage() {
                   setInWishlist(!inWishlist);
                   showToast(inWishlist ? "Removed from wishlist" : `${product.name} added to wishlist! 💖`);
                 }}
+                aria-label={inWishlist ? "Remove from wishlist" : "Add to wishlist"}
                 className={`p-3.5 rounded-xl border-2 transition-all ${
                   inWishlist
                     ? "border-pink-400 bg-pink-50 text-pink-500"
@@ -339,12 +350,14 @@ export default function ProductDetailPage() {
 
               <button
                 onClick={() => { navigator.clipboard.writeText(window.location.href); showToast("Link copied!"); }}
+                aria-label="Share product"
                 className="p-3.5 rounded-xl border-2 border-gray-200 bg-white text-gray-500 hover:border-gray-300 transition-all"
               >
                 <Share2 className="h-5 w-5" />
               </button>
             </div>
 
+            {/* SKU */}
             {product.sku && (
               <p className="text-xs text-gray-400">SKU: {product.sku}</p>
             )}

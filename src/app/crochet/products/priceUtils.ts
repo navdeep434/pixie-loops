@@ -1,44 +1,16 @@
-export type PriceType = "fixed" | "percentage";
-
-export type OptionValue = {
-  id: number;
-  label: string;
-  price_adjustment: number;
-  price_type: PriceType;
-};
-
-export type ProductOption = {
-  id: number;
-  name: string;
-  type: "radio" | "dropdown" | "number" | "checkbox";
-  is_required: boolean;
-  sort_order: number;
-  values: OptionValue[];
-};
+import { ProductOption } from "./types";
 
 export type SelectedOptions = Record<
-  number, // option_id
-  | { value_id: number }           // radio, dropdown
-  | { value_ids: number[] }        // checkbox
-  | { custom_value: number }       // number input
+  number,
+  | { value_id: number }
+  | { value_ids: number[] }
+  | { custom_value: number }
 >;
 
 /**
- * Calculate price adjustment for a single option value.
- */
-export function calcValueAdjustment(
-  basePrice: number,
-  adjustment: number,
-  priceType: PriceType
-): number {
-  if (priceType === "percentage") {
-    return (basePrice * adjustment) / 100;
-  }
-  return adjustment;
-}
-
-/**
  * Calculate total price given base price and all selected options.
+ * - radio / dropdown / checkbox → add price_modifier of selected value(s)
+ * - number → multiply custom_value by option's price_per_unit
  */
 export function calcTotalPrice(
   basePrice: number,
@@ -54,31 +26,32 @@ export function calcTotalPrice(
     if (option.type === "radio" || option.type === "dropdown") {
       const s = sel as { value_id: number };
       const val = option.values.find((v) => v.id === s.value_id);
-      if (val) {
-        total += calcValueAdjustment(basePrice, val.price_adjustment, val.price_type);
-      }
+      if (val) total += val.price_modifier;
     }
 
     if (option.type === "checkbox") {
       const s = sel as { value_ids: number[] };
       for (const vid of s.value_ids) {
         const val = option.values.find((v) => v.id === vid);
-        if (val) {
-          total += calcValueAdjustment(basePrice, val.price_adjustment, val.price_type);
-        }
+        if (val) total += val.price_modifier;
       }
     }
 
-    // number type: no price_adjustment per unit by default
-    // extend here if you add per-unit pricing later
+    if (option.type === "number") {
+      const s = sel as { custom_value: number };
+      const perUnit = option.price_per_unit ?? 0;
+      if (s.custom_value && perUnit > 0) {
+        total += s.custom_value * perUnit;
+      }
+    }
   }
 
   return Math.max(0, total);
 }
 
 /**
- * Validate all required options are selected.
- * Returns list of option names that are missing.
+ * Validate all required options are filled.
+ * Returns list of option names that are missing / invalid.
  */
 export function validateOptions(
   options: ProductOption[],
@@ -97,16 +70,13 @@ export function validateOptions(
 
     if (option.type === "checkbox") {
       const s = sel as { value_ids: number[] };
-      if (!s.value_ids || s.value_ids.length === 0) {
-        missing.push(option.name);
-      }
+      if (!s.value_ids || s.value_ids.length === 0) missing.push(option.name);
     }
 
     if (option.type === "number") {
       const s = sel as { custom_value: number };
-      if (!s.custom_value || s.custom_value < 1) {
-        missing.push(option.name);
-      }
+      const min = option.min_value ?? 1;
+      if (!s.custom_value || s.custom_value < min) missing.push(option.name);
     }
   }
 
@@ -146,9 +116,5 @@ export function buildCartPayload(
     }
   }
 
-  return {
-    product_id: productId,
-    quantity,
-    selected_options: selectedOptions,
-  };
+  return { product_id: productId, quantity, selected_options: selectedOptions };
 }

@@ -28,6 +28,7 @@ export type Product = {
   id: number;
   name: string;
   slug: string;
+  sku?: string | null;           // ← added
   price: number;
   sale_price?: number | null;
   final_price: number;
@@ -35,7 +36,7 @@ export type Product = {
   category?: { id: number; name: string; slug: string } | null;
   image?: string | null;
   images?: { id: number; url: string; is_primary: boolean }[];
-  description?: string;
+  description?: string | null;
   in_stock: boolean;
   stock: number;
   options?: ProductOption[];
