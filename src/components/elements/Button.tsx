@@ -12,6 +12,8 @@ type ButtonProps = {
   loading?: boolean;
   onClick?: () => void;
   className?: string;
+  "aria-label"?: string;
+  title?: string;
 };
 
 export default function Button({
@@ -23,6 +25,8 @@ export default function Button({
   loading = false,
   onClick,
   className = "",
+  "aria-label": ariaLabel,
+  title,
 }: ButtonProps) {
   const variants: Record<string, string> = {
     primary:
@@ -43,7 +47,6 @@ export default function Button({
     lg: "px-8 py-3 text-lg",
   };
 
-  // Fallback to primary if variant not found
   const variantClass = variants[variant] || variants.primary;
   const sizeClass = sizes[size] || sizes.md;
 
@@ -52,6 +55,8 @@ export default function Button({
       type={type}
       disabled={disabled || loading}
       onClick={onClick}
+      aria-label={ariaLabel}
+      title={title}
       className={`rounded-lg font-semibold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center gap-2 ${variantClass} ${sizeClass} ${className}`}
     >
       {loading && <Loader2 className="h-4 w-4 animate-spin" />}

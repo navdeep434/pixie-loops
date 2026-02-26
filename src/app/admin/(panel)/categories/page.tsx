@@ -5,8 +5,9 @@ import Link from "next/link";
 import {
   Plus, Search, Edit, Trash2, Eye, Tag, Package, TrendingUp, RefreshCw,
 } from "lucide-react";
-import { useToast } from "@/components/elements/useToast";
-import { API_URL } from "@/lib/api/config";
+import { Loading, useDialog } from "@/components/elements";
+import apiClient from "@/lib/api/client";
+import { Button, Card, Heading, Text } from "@/components/elements";
 
 type Category = {
   id: number;
@@ -18,24 +19,25 @@ type Category = {
   parent: { id: number; name: string } | null;
 };
 
-const ICONS: Record<string, string> = {
-  blankets: "🧶", toys: "🧸", bags: "👜", "home-decor": "🏠",
-  "baby-items": "👶", "pet-accessories": "🐾",
-};
+type AddForm = { name: string; description: string };
+
 const COLORS = [
   "from-purple-500 to-purple-600", "from-pink-500 to-pink-600",
-  "from-blue-500 to-blue-600", "from-green-500 to-green-600",
-  "from-yellow-500 to-yellow-600", "from-orange-500 to-orange-600",
-  "from-teal-500 to-teal-600", "from-indigo-500 to-indigo-600",
+  "from-blue-500 to-blue-600",   "from-green-500 to-green-600",
+  "from-yellow-500 to-yellow-600","from-orange-500 to-orange-600",
+  "from-teal-500 to-teal-600",   "from-indigo-500 to-indigo-600",
 ];
 
+const getColor = (i: number) => COLORS[i % COLORS.length];
+
 export default function CategoriesPage() {
-  const { showToast } = useToast();
+  const dialog = useDialog();
+
   const [categories, setCategories] = useState<Category[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading]       = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
-  const [addForm, setAddForm] = useState({ name: "", description: "" });
+  const [addForm, setAddForm]       = useState<AddForm>({ name: "", description: "" });
   const [addLoading, setAddLoading] = useState(false);
 
   const fetchCategories = useCallback(async () => {
@@ -43,16 +45,10 @@ export default function CategoriesPage() {
     try {
       const params = new URLSearchParams();
       if (searchQuery) params.set("search", searchQuery);
-
-      const res = await fetch(`${API_URL}/admin/categories?${params}`, {
-        credentials: "include",
-        headers: { Accept: "application/json" },
-      });
-      if (!res.ok) throw new Error("Failed to fetch categories");
-      const data = await res.json();
+      const data = await apiClient.get<any>(`/admin/categories?${params}`);
       setCategories(data.data ?? data.categories ?? []);
     } catch (err: any) {
-      showToast(err.message || "Failed to load categories", "error");
+      await dialog.warn(err.message || "Failed to load categories.", "Error");
     } finally {
       setLoading(false);
     }
@@ -64,70 +60,72 @@ export default function CategoriesPage() {
   }, [fetchCategories]);
 
   const handleDelete = async (id: number, name: string) => {
-    if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
+    const confirmed = await dialog.danger(
+      <>Delete <strong>"{name}"</strong>? This cannot be undone.</>,
+      "Delete Category"
+    );
+    if (!confirmed) return;
     try {
-      const res = await fetch(`${API_URL}/admin/categories/${id}`, {
-        method: "DELETE",
-        credentials: "include",
-        headers: { Accept: "application/json" },
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Delete failed");
-      showToast(`"${name}" deleted successfully`, "success");
+      await apiClient.delete(`/admin/categories/${id}`);
+      await dialog.success(`"${name}" has been deleted.`, "Deleted");
       fetchCategories();
     } catch (err: any) {
-      showToast(err.message || "Failed to delete category", "error");
+      await dialog.warn(err.message || "Failed to delete category.", "Error");
     }
   };
 
   const handleToggleStatus = async (id: number, name: string, current: string) => {
-    const newStatus = current === "active" ? false : true;
+    const isActive  = current === "active";
+    const confirmed = await dialog.show({
+      title:        isActive ? "Deactivate Category" : "Activate Category",
+      message:      isActive
+        ? <>Deactivate <strong>"{name}"</strong>? It will be hidden from the storefront.</>
+        : <>Activate <strong>"{name}"</strong>? It will become visible on the storefront.</>,
+      variant:      isActive ? "warning" : "info",
+      confirmLabel: isActive ? "Deactivate" : "Activate",
+    });
+    if (!confirmed) return;
     try {
-      const res = await fetch(`${API_URL}/admin/categories/${id}`, {
-        method: "PUT",
-        credentials: "include",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({ status: newStatus }),
-      });
-      if (!res.ok) throw new Error("Failed to update status");
-      showToast(`"${name}" is now ${newStatus ? "active" : "inactive"}`, "success");
+      await apiClient.put(`/admin/categories/${id}`, { status: !isActive });
+      await dialog.success(`"${name}" is now ${!isActive ? "active" : "inactive"}.`, "Updated");
       fetchCategories();
     } catch {
-      showToast("Failed to update category status", "error");
+      await dialog.warn("Failed to update category status.", "Error");
     }
   };
 
   const handleAdd = async () => {
     if (!addForm.name.trim()) {
-      showToast("Category name is required", "error");
+      await dialog.warn("Category name is required.", "Missing Field");
       return;
     }
+    const confirmed = await dialog.show({
+      title:        "Create Category",
+      message:      <>Create a new category called <strong>"{addForm.name}"</strong>?</>,
+      variant:      "info",
+      confirmLabel: "Create",
+    });
+    if (!confirmed) return;
+
     setAddLoading(true);
     try {
-      const res = await fetch(`${API_URL}/admin/categories`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({ name: addForm.name, description: addForm.description }),
+      await apiClient.post(`/admin/categories`, {
+        name: addForm.name,
+        description: addForm.description || null,
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Failed to create category");
-      showToast("Category created successfully!", "success");
+      await dialog.success(`"${addForm.name}" has been created.`, "Created");
       setShowAddModal(false);
       setAddForm({ name: "", description: "" });
       fetchCategories();
     } catch (err: any) {
-      showToast(err.message || "Failed to create category", "error");
+      await dialog.warn(err.message || "Failed to create category.", "Error");
     } finally {
       setAddLoading(false);
     }
   };
 
-  const totalProducts = categories.reduce((sum, c) => sum + c.products_count, 0);
+  const totalProducts    = categories.reduce((sum, c) => sum + c.products_count, 0);
   const activeCategories = categories.filter((c) => c.status === "active").length;
-
-  const getIcon = (slug: string) => ICONS[slug] ?? "🏷️";
-  const getColor = (index: number) => COLORS[index % COLORS.length];
 
   return (
     <div className="space-y-6">
@@ -135,50 +133,52 @@ export default function CategoriesPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Categories</h2>
-          <p className="text-sm text-gray-600 mt-1">Organize your products into categories</p>
+          <Heading level={2} className="text-gray-900">Categories</Heading>
+          <Text variant="small" className="text-gray-600 mt-1">Organize your products into categories</Text>
         </div>
         <div className="flex gap-3">
-          <button
+          <Button
+            variant="ghost"
             onClick={fetchCategories}
-            className="p-2.5 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-            title="Refresh"
+            aria-label="Refresh categories"
+            className="p-2.5 border border-gray-200"
           >
-            <RefreshCw className={`h-5 w-5 ${loading ? "animate-spin" : ""}`} />
-          </button>
-          <button
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+          </Button>
+          <Button
+            variant="primary"
             onClick={() => setShowAddModal(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-semibold rounded-lg shadow-md transition-all"
+            className="gap-2"
           >
             <Plus className="h-5 w-5" />
             Add Category
-          </button>
+          </Button>
         </div>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {[
-          { label: "Total Categories", value: categories.length, color: "text-gray-900", icon: <Tag className="h-6 w-6 text-white" />, bg: "from-purple-500 to-pink-500" },
-          { label: "Active Categories", value: activeCategories, color: "text-green-600", icon: <TrendingUp className="h-6 w-6 text-white" />, bg: "from-green-500 to-emerald-500" },
-          { label: "Total Products", value: totalProducts, color: "text-blue-600", icon: <Package className="h-6 w-6 text-white" />, bg: "from-blue-500 to-indigo-500" },
-        ].map(({ label, value, color, icon, bg }) => (
-          <div key={label} className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+          { label: "Total Categories", value: categories.length, color: "text-gray-900",  Icon: Tag,       bg: "from-purple-500 to-pink-500"    },
+          { label: "Active",           value: activeCategories,  color: "text-green-600", Icon: TrendingUp,bg: "from-green-500 to-emerald-500"  },
+          { label: "Total Products",   value: totalProducts,     color: "text-blue-600",  Icon: Package,   bg: "from-blue-500 to-indigo-500"    },
+        ].map(({ label, value, color, Icon, bg }) => (
+          <Card key={label} variant="bordered" className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">{label}</p>
-                <p className={`text-2xl font-bold mt-1 ${color}`}>{value}</p>
+                <Text variant="small" className="text-gray-600">{label}</Text>
+                <Heading level={3} className={`${color} mt-1`}>{value}</Heading>
               </div>
               <div className={`h-12 w-12 rounded-lg bg-gradient-to-br ${bg} flex items-center justify-center`}>
-                {icon}
+                <Icon className="h-6 w-6 text-white" />
               </div>
             </div>
-          </div>
+          </Card>
         ))}
       </div>
 
       {/* Search */}
-      <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+      <Card variant="elevated" className="p-5">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
           <input
@@ -189,88 +189,93 @@ export default function CategoriesPage() {
             className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
           />
         </div>
-      </div>
+      </Card>
 
       {/* Grid */}
       {loading ? (
-        <div className="flex items-center justify-center py-20">
-          <div className="w-8 h-8 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" />
+        <Loading />
+      ) : categories.length === 0 ? (
+        <div className="text-center py-20">
+          <Tag className="h-12 w-12 text-gray-200 mx-auto mb-4" />
+          <Heading level={4} className="text-gray-900 mb-1">No categories found</Heading>
+          <Text className="text-gray-500">Try adjusting your search or add a new category</Text>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {categories.map((category, index) => (
-            <div key={category.id} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden hover:shadow-lg transition-all">
-              {/* Card Header */}
-              <div className={`h-32 bg-gradient-to-br ${getColor(index)} flex items-center justify-center text-6xl relative`}>
-                {getIcon(category.slug)}
+            <Card key={category.id} variant="elevated" className="overflow-hidden hover:shadow-lg transition-shadow">
+              {/* Coloured top band with initial */}
+              <div className={`h-28 bg-gradient-to-br ${getColor(index)} flex items-center justify-center relative`}>
+                <span className="text-5xl font-bold text-white/30 select-none">
+                  {category.name.charAt(0).toUpperCase()}
+                </span>
                 <div className="absolute top-3 right-3">
-                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                  <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
                     category.status === "active"
-                      ? "bg-green-100 text-green-700"
-                      : "bg-gray-100 text-gray-700"
+                      ? "bg-white/20 text-white backdrop-blur-sm"
+                      : "bg-black/20 text-white/70 backdrop-blur-sm"
                   }`}>
                     {category.status}
                   </span>
                 </div>
               </div>
 
-              {/* Card Content */}
-              <div className="p-6">
-                <h4 className="font-bold text-gray-900 mb-1">{category.name}</h4>
-                <p className="text-sm text-gray-500 mb-4 line-clamp-2 min-h-[40px]">
+              <div className="p-5">
+                <Heading level={4} className="text-gray-900 mb-1">{category.name}</Heading>
+                <Text variant="small" className="text-gray-500 line-clamp-2 min-h-[36px] mb-4">
                   {category.description || "No description provided."}
-                </p>
+                </Text>
 
                 <div className="flex items-center gap-4 mb-4 pb-4 border-b border-gray-100">
                   <div className="flex items-center gap-1.5">
                     <Package className="h-4 w-4 text-gray-400" />
-                    <span className="text-sm text-gray-600">{category.products_count} products</span>
+                    <Text variant="small" className="text-gray-600">{category.products_count} products</Text>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <Tag className="h-4 w-4 text-gray-400" />
-                    <span className="text-sm text-gray-500 truncate max-w-[100px]">{category.slug}</span>
+                    <Text variant="small" className="text-gray-400 truncate max-w-[100px]">{category.slug}</Text>
                   </div>
                 </div>
 
-                <div className="flex gap-2">
-                  <button
+                <div className="flex items-center gap-2 min-w-0">
+                  <Button
+                    variant="ghost"
                     onClick={() => handleToggleStatus(category.id, category.name, category.status)}
-                    className="flex-1 flex items-center justify-center gap-2 px-3 py-2 border border-gray-200 text-gray-700 hover:bg-gray-50 text-sm font-medium rounded-lg transition-colors"
+                    className="flex-1 min-w-0 gap-1.5 border border-gray-200 text-gray-700 hover:bg-gray-50 text-sm truncate"
                   >
-                    <Eye className="h-4 w-4" />
-                    {category.status === "active" ? "Deactivate" : "Activate"}
-                  </button>
-                  <Link href={`/admin/categories/${category.id}/edit`}>
-                    <button className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
-                      <Edit className="h-4 w-4" />
-                    </button>
-                  </Link>
-                  <button
-                    onClick={() => handleDelete(category.id, category.name)}
-                    className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                    <Eye className="h-4 w-4 flex-shrink-0" />
+                    <span className="truncate">
+                      {category.status === "active" ? "Deactivate" : "Activate"}
+                    </span>
+                  </Button>
+                  <div className="flex gap-1 flex-shrink-0">
+                    <Link href={`/admin/categories/${category.id}/edit`}>
+                      <Button variant="ghost" aria-label={`Edit ${category.name}`} className="p-2 text-blue-600 hover:bg-blue-50">
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                    </Link>
+                    <Button
+                      variant="ghost"
+                      onClick={() => handleDelete(category.id, category.name)}
+                      aria-label={`Delete ${category.name}`}
+                      className="p-2 text-red-600 hover:bg-red-50"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               </div>
-            </div>
+            </Card>
           ))}
-
-          {categories.length === 0 && (
-            <div className="col-span-3 text-center py-16">
-              <Tag className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-              <p className="text-gray-900 font-semibold">No categories found</p>
-              <p className="text-sm text-gray-500 mt-1">Try adjusting your search or add a new category</p>
-            </div>
-          )}
         </div>
       )}
 
       {/* Add Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl w-full max-w-md p-6 shadow-xl">
-            <h4 className="text-lg font-bold text-gray-900 mb-5">Add New Category</h4>
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowAddModal(false)} aria-hidden="true" />
+          <div className="relative w-full sm:max-w-md bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl p-6">
+            <Heading level={4} className="text-gray-900 mb-5">Add New Category</Heading>
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -280,7 +285,9 @@ export default function CategoriesPage() {
                   type="text"
                   value={addForm.name}
                   onChange={(e) => setAddForm({ ...addForm, name: e.target.value })}
+                  onKeyDown={(e) => e.key === "Enter" && handleAdd()}
                   placeholder="e.g. Blankets"
+                  autoFocus
                   className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
                 />
               </div>
@@ -294,21 +301,23 @@ export default function CategoriesPage() {
                   className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
                 />
               </div>
-              <div className="flex gap-3 pt-2">
-                <button
+              <div className="flex gap-3 pt-1">
+                <Button
+                  variant="ghost"
                   onClick={() => { setShowAddModal(false); setAddForm({ name: "", description: "" }); }}
-                  className="flex-1 px-4 py-2.5 border border-gray-200 text-gray-700 hover:bg-gray-50 font-medium rounded-lg transition-colors"
+                  className="flex-1 justify-center border border-gray-200"
                 >
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="primary"
                   onClick={handleAdd}
                   disabled={addLoading}
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-semibold rounded-lg transition-all disabled:opacity-70"
+                  className="flex-1 justify-center gap-2"
                 >
                   {addLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
                   {addLoading ? "Creating..." : "Add Category"}
-                </button>
+                </Button>
               </div>
             </div>
           </div>

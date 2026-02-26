@@ -26,5 +26,6 @@ export { default as Pagination } from "./Pagination";
 export { default as Dropdown } from "./Dropdown";
 
 // Utilities (hooks / providers are NOT default exports)
-// ● imported directly where needed
 export { useToast, ToastProvider } from "./useToast";
+export { useDialog, DialogProvider } from "./DialogProvider";
+export { default as Loading } from "./loading";

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Mail, Lock, Eye, EyeOff, Sparkles, ArrowRight, CheckCircle, XCircle } from "lucide-react";
-import { API_URL } from "@/lib/api/config";
+import apiClient, { initCsrf } from "@/lib/api/client";
 
 type ToastState = { message: string; type: "success" | "error" } | null;
 
@@ -26,19 +26,16 @@ export default function AdminLoginPage() {
     setIsLoading(true);
 
     try {
-      const response = await fetch(`${API_URL}/auth/admin/login`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-        credentials: "include",
-        body: JSON.stringify({ email, password, remember: true }),
-      });
+      // Always get a fresh CSRF token before login
+      await initCsrf();
 
-      const data = await response.json();
+      const data = await apiClient.post<{
+        success: boolean;
+        user: any;
+        message?: string;
+      }>("/auth/admin/login", { email, password, remember: true });
 
-      if (!response.ok || !data.success) {
+      if (!data.success) {
         throw new Error(data.message || "Login failed");
       }
 

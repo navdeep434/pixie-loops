@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import AdminSidebar from "@/components/admin/AdminSidebar";
 import AdminHeader from "@/components/admin/AdminHeader";
-import { ToastProvider } from "@/components/elements/useToast";
-import { API_URL } from "@/lib/api/config";
+import apiClient, { initCsrf } from "@/lib/api/client";
+import { ToastProvider, DialogProvider, Loading } from "@/components/elements";
 
 interface User {
   id: number;
@@ -17,30 +17,24 @@ interface User {
 
 function AdminPanelGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser]           = useState<User | null>(null);
   const [authState, setAuthState] = useState<"loading" | "authenticated" | "unauthenticated">("loading");
+  const didCheck                  = useRef(false);
 
   useEffect(() => {
+    if (didCheck.current) return;
+    didCheck.current = true;
     checkAdminAuth();
   }, []);
 
   useEffect(() => {
-    if (authState === "unauthenticated") {
-      router.replace("/admin/login");
-    }
+    if (authState === "unauthenticated") router.replace("/admin/login");
   }, [authState, router]);
 
   const checkAdminAuth = async () => {
     try {
-      const response = await fetch(`${API_URL}/auth/admin/me`, {
-        credentials: "include",
-        headers: { Accept: "application/json" },
-      });
-
-      if (!response.ok) throw new Error("Not authenticated");
-
-      const data = await response.json();
-
+      await initCsrf();
+      const data = await apiClient.silentGet<{ success: boolean; user: User }>("/auth/admin/me");
       if (data.success && data.user?.roles.includes("admin")) {
         setUser(data.user);
         setAuthState("authenticated");
@@ -55,9 +49,7 @@ function AdminPanelGuard({ children }: { children: React.ReactNode }) {
 
   if (authState !== "authenticated") {
     return (
-      <div className="h-screen flex items-center justify-center bg-gray-50">
-        <div className="w-8 h-8 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" />
-      </div>
+      <Loading />
     );
   }
 
@@ -77,7 +69,9 @@ function AdminPanelGuard({ children }: { children: React.ReactNode }) {
 export default function AdminPanelLayout({ children }: { children: React.ReactNode }) {
   return (
     <ToastProvider>
-      <AdminPanelGuard>{children}</AdminPanelGuard>
+      <DialogProvider>
+        <AdminPanelGuard>{children}</AdminPanelGuard>
+      </DialogProvider>
     </ToastProvider>
   );
 }

@@ -3,10 +3,12 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import {
-  Plus, Search, Filter, Edit, Trash2, Eye, Copy, Package, RefreshCw,
+  Plus, Search, Edit, Trash2, Eye, Copy, Package, RefreshCw,
 } from "lucide-react";
 import { useToast } from "@/components/elements/useToast";
-import { API_URL } from "@/lib/api/config";
+import { Loading, useDialog } from "@/components/elements";
+import apiClient from "@/lib/api/client";
+import { Button } from "@/components/elements";
 
 type Product = {
   id: number;
@@ -23,53 +25,38 @@ type Product = {
 
 export default function ProductsPage() {
   const { showToast } = useToast();
+  const dialog = useDialog();
 
-  const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [products, setProducts]               = useState<Product[]>([]);
+  const [loading, setLoading]                 = useState(true);
+  const [searchQuery, setSearchQuery]         = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
-  const [selectedStatus, setSelectedStatus] = useState("all");
-  const [categories, setCategories] = useState<string[]>([]);
-  const [stats, setStats] = useState({
-    total: 0, active: 0, lowStock: 0, outOfStock: 0,
-  });
+  const [selectedStatus, setSelectedStatus]   = useState("all");
+  const [categories, setCategories]           = useState<string[]>([]);
+  const [stats, setStats]                     = useState({ total: 0, active: 0, lowStock: 0, outOfStock: 0 });
 
   const fetchProducts = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (searchQuery) params.set("search", searchQuery);
+      if (searchQuery)                params.set("search", searchQuery);
       if (selectedCategory !== "all") params.set("category", selectedCategory);
-      if (selectedStatus !== "all") params.set("status", selectedStatus);
+      if (selectedStatus !== "all")   params.set("status", selectedStatus);
 
-      const response = await fetch(`${API_URL}/admin/products?${params}`, {
-        credentials: "include",
-        headers: { Accept: "application/json" },
-      });
-
-      if (!response.ok) throw new Error("Failed to fetch products");
-
-      const data = await response.json();
-
-      const list: Product[] = data.data ?? data.products ?? data ?? [];
+      const data = await apiClient.get<{ data?: Product[]; products?: Product[] }>(
+        `/admin/products?${params}`
+      );
+      const list: Product[] = data.data ?? data.products ?? [];
       setProducts(list);
-
-      // Derive stats
       setStats({
-        total: list.length,
-        active: list.filter((p) => p.status === "active").length,
-        lowStock: list.filter((p) => p.stock > 0 && p.stock < 10).length,
+        total:      list.length,
+        active:     list.filter((p) => p.status === "active").length,
+        lowStock:   list.filter((p) => p.stock > 0 && p.stock < 10).length,
         outOfStock: list.filter((p) => p.stock === 0).length,
       });
-
-      // Derive unique categories
-      const cats = Array.from(
-        new Set(
-          list.map((p) =>
-            typeof p.category === "object" ? p.category.name : p.category
-          )
-        )
-      );
+      const cats = Array.from(new Set(
+        list.map((p) => typeof p.category === "object" ? p.category.name : p.category)
+      ));
       setCategories(cats);
     } catch (err: any) {
       showToast(err.message || "Failed to load products", "error");
@@ -79,38 +66,39 @@ export default function ProductsPage() {
   }, [searchQuery, selectedCategory, selectedStatus]);
 
   useEffect(() => {
-    const debounce = setTimeout(() => fetchProducts(), 400);
-    return () => clearTimeout(debounce);
+    const t = setTimeout(() => fetchProducts(), 400);
+    return () => clearTimeout(t);
   }, [fetchProducts]);
 
   const handleDelete = async (id: number, name: string) => {
-    if (!confirm(`Delete "${name}"?`)) return;
+    const confirmed = await dialog.danger(
+      <>Are you sure you want to delete <strong>"{name}"</strong>? This action cannot be undone.</>,
+      "Delete Product"
+    );
+    if (!confirmed) return;
+
     try {
-      const res = await fetch(`${API_URL}/admin/products/${id}`, {
-        method: "DELETE",
-        credentials: "include",
-        headers: { Accept: "application/json" },
-      });
-      if (!res.ok) throw new Error("Delete failed");
-      showToast(`"${name}" deleted successfully`, "success");
+      await apiClient.delete(`/admin/products/${id}`);
+      await dialog.success(`"${name}" has been deleted.`, "Deleted");
       fetchProducts();
     } catch {
-      showToast("Failed to delete product", "error");
+      await dialog.warn("Failed to delete the product. Please try again.", "Error");
     }
   };
 
   const handleDuplicate = async (id: number, name: string) => {
+    const confirmed = await dialog.confirm(
+      <>Duplicate <strong>"{name}"</strong>? A copy will be created as a draft.</>,
+      "Duplicate Product"
+    );
+    if (!confirmed) return;
+
     try {
-      const res = await fetch(`${API_URL}/admin/products/${id}/duplicate`, {
-        method: "POST",
-        credentials: "include",
-        headers: { Accept: "application/json" },
-      });
-      if (!res.ok) throw new Error("Duplicate failed");
-      showToast(`"${name}" duplicated successfully`, "success");
+      await apiClient.post(`/admin/products/${id}/duplicate`);
+      await dialog.success(`"${name}" duplicated successfully.`, "Duplicated");
       fetchProducts();
     } catch {
-      showToast("Failed to duplicate product", "error");
+      await dialog.warn("Failed to duplicate the product.", "Error");
     }
   };
 
@@ -125,8 +113,8 @@ export default function ProductsPage() {
 
   const getStatusColor = (status: Product["status"]) => {
     switch (status) {
-      case "active": return "bg-green-100 text-green-700";
-      case "draft": return "bg-yellow-100 text-yellow-700";
+      case "active":   return "bg-green-100 text-green-700";
+      case "draft":    return "bg-yellow-100 text-yellow-700";
       case "archived": return "bg-gray-100 text-gray-700";
     }
   };
@@ -143,8 +131,8 @@ export default function ProductsPage() {
         <div className="flex gap-3">
           <button
             onClick={fetchProducts}
+            aria-label="Refresh"
             className="p-2.5 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-            title="Refresh"
           >
             <RefreshCw className={`h-5 w-5 ${loading ? "animate-spin" : ""}`} />
           </button>
@@ -160,10 +148,10 @@ export default function ProductsPage() {
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: "Total Products", value: stats.total, color: "text-gray-900" },
-          { label: "Active", value: stats.active, color: "text-green-600" },
-          { label: "Low Stock", value: stats.lowStock, color: "text-orange-600" },
-          { label: "Out of Stock", value: stats.outOfStock, color: "text-red-600" },
+          { label: "Total Products", value: stats.total,      color: "text-gray-900"   },
+          { label: "Active",         value: stats.active,     color: "text-green-600"  },
+          { label: "Low Stock",      value: stats.lowStock,   color: "text-orange-600" },
+          { label: "Out of Stock",   value: stats.outOfStock, color: "text-red-600"    },
         ].map(({ label, value, color }) => (
           <div key={label} className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
             <p className="text-sm text-gray-600">{label}</p>
@@ -186,16 +174,16 @@ export default function ProductsPage() {
             />
           </div>
           <select
+            aria-label="Filter by category"
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
             className="px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
           >
             <option value="all">All Categories</option>
-            {categories.map((cat) => (
-              <option key={cat} value={cat}>{cat}</option>
-            ))}
+            {categories.map((cat) => <option key={cat} value={cat}>{cat}</option>)}
           </select>
           <select
+            aria-label="Filter by status"
             value={selectedStatus}
             onChange={(e) => setSelectedStatus(e.target.value)}
             className="px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
@@ -211,19 +199,14 @@ export default function ProductsPage() {
       {/* Table */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         {loading ? (
-          <div className="flex items-center justify-center py-20">
-            <div className="w-8 h-8 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" />
-          </div>
+          <Loading />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
                   {["Product", "Category", "Price", "Stock", "Sales", "Status", "Actions"].map((h) => (
-                    <th
-                      key={h}
-                      className={`px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider ${h === "Actions" ? "text-right" : "text-left"}`}
-                    >
+                    <th key={h} className={`px-6 py-4 text-xs font-semibold text-gray-600 uppercase tracking-wider ${h === "Actions" ? "text-right" : "text-left"}`}>
                       {h}
                     </th>
                   ))}
@@ -231,18 +214,16 @@ export default function ProductsPage() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {products.map((product) => {
-                  const img = getProductImage(product.images);
+                  const img     = getProductImage(product.images);
                   const catName = getCategoryName(product.category);
                   return (
                     <tr key={product.id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
                           <div className="h-12 w-12 rounded-lg bg-gradient-to-br from-purple-100 to-pink-100 flex items-center justify-center overflow-hidden flex-shrink-0">
-                            {img ? (
-                              <img src={img} alt={product.name} className="h-full w-full object-cover" />
-                            ) : (
-                              <Package className="h-6 w-6 text-purple-400" />
-                            )}
+                            {img
+                              ? <img src={img} alt={product.name} className="h-full w-full object-cover" />
+                              : <Package className="h-6 w-6 text-purple-400" />}
                           </div>
                           <div>
                             <p className="font-semibold text-gray-900 text-sm">{product.name}</p>
@@ -260,15 +241,12 @@ export default function ProductsPage() {
                       <td className="px-6 py-4">
                         <span className={`text-sm font-semibold ${
                           product.stock === 0 ? "text-red-600" :
-                          product.stock < 10 ? "text-orange-600" :
-                          "text-gray-900"
+                          product.stock < 10  ? "text-orange-600" : "text-gray-900"
                         }`}>
                           {product.stock} units
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-700">
-                        {product.sales_count ?? 0} sold
-                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-700">{product.sales_count ?? 0} sold</td>
                       <td className="px-6 py-4">
                         <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(product.status)}`}>
                           {product.status}
@@ -277,27 +255,31 @@ export default function ProductsPage() {
                       <td className="px-6 py-4">
                         <div className="flex items-center justify-end gap-1">
                           <Link href={`/admin/products/${product.id}`}>
-                            <button className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+                            <Button variant="ghost" aria-label={`View ${product.name}`} className="p-2 text-gray-600 hover:bg-gray-100">
                               <Eye className="h-4 w-4" />
-                            </button>
+                            </Button>
                           </Link>
                           <Link href={`/admin/products/${product.id}/edit`}>
-                            <button className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
+                            <Button variant="ghost" aria-label={`Edit ${product.name}`} className="p-2 text-blue-600 hover:bg-blue-50">
                               <Edit className="h-4 w-4" />
-                            </button>
+                            </Button>
                           </Link>
-                          <button
+                          <Button
+                            variant="ghost"
                             onClick={() => handleDuplicate(product.id, product.name)}
-                            className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+                            aria-label={`Duplicate ${product.name}`}
+                            className="p-2 text-purple-600 hover:bg-purple-50"
                           >
                             <Copy className="h-4 w-4" />
-                          </button>
-                          <button
+                          </Button>
+                          <Button
+                            variant="ghost"
                             onClick={() => handleDelete(product.id, product.name)}
-                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            aria-label={`Delete ${product.name}`}
+                            className="p-2 text-red-600 hover:bg-red-50"
                           >
                             <Trash2 className="h-4 w-4" />
-                          </button>
+                          </Button>
                         </div>
                       </td>
                     </tr>
